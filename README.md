@@ -271,28 +271,33 @@ Note that changes to the major version (i.e. the first number) represent possibl
 may require modifications in your code to migrate.  Changes to the minor version (i.e. the second number)
 should represent non-breaking changes.  The third number represents any very minor bugfix patches.
 
+* **6.0.0**: This release contains the following updates:
+  * Inaugural release of ianferguson/vault-java-driver fork
+  * Move code packages and maven groupdId from com.bettercloud to io.ianferguson [(PR #1)](https://github.com/ianferguson/vault-java-driver/pull/1)
+  * No code changes
+
 * **5.1.0**:  This release contains the following updates:
-  * Supports path prefixes when using K/V engine V2.  [(PR #189)](https://github.com/BetterCloud/vault-java-driver/pull/189)
-  * Fixes issues with bulk requests in the transit API.  [(PR #195)](https://github.com/BetterCloud/vault-java-driver/pull/195)
-  * Adds response body to exception for Auth failures.  [(PR #198)](https://github.com/BetterCloud/vault-java-driver/pull/198)
-  * Support all options for the createToken operation.  [(PR #199)](https://github.com/BetterCloud/vault-java-driver/pull/199)
+  * Supports path prefixes when using K/V engine V2.  [(PR BetterCloud#189)](https://github.com/BetterCloud/vault-java-driver/pull/189)
+  * Fixes issues with bulk requests in the transit API.  [(PR BetterCloud#195)](https://github.com/BetterCloud/vault-java-driver/pull/195)
+  * Adds response body to exception for Auth failures.  [(PR BetterCloud#198)](https://github.com/BetterCloud/vault-java-driver/pull/198)
+  * Support all options for the createToken operation.  [(PR BetterCloud#199)](https://github.com/BetterCloud/vault-java-driver/pull/199)
 
 * **5.0.0**:  This release contains the following updates:
   * Changes the retry behavior, to no longer attempt retries on 4xx response codes (for which retries generally won't succeed anyway).  This
     is the only (mildly) breaking change in this release, necessitating a major version bump. [(PR #176)](https://github.com/BetterCloud/vault-java-driver/pull/176)
-  * Implements support for the Database secret engine. [(PR #175)](https://github.com/BetterCloud/vault-java-driver/pull/175)
-  * Makes the "x-vault-token" header optional, to allow use of Vault Agent.  [(PR #184)](https://github.com/BetterCloud/vault-java-driver/pull/184)
-  * Removes stray uses of `System.out.println` in favor of `java.util.logging`. [(PR #178)](https://github.com/BetterCloud/vault-java-driver/pull/178)
-  * Adds the enum constant `MountType.KEY_VALUE_V2`.  [(PR #182)](https://github.com/BetterCloud/vault-java-driver/pull/182)
+  * Implements support for the Database secret engine. [(PR BetterCloud#175)](https://github.com/BetterCloud/vault-java-driver/pull/175)
+  * Makes the "x-vault-token" header optional, to allow use of Vault Agent.  [(PR BetterCloud#184)](https://github.com/BetterCloud/vault-java-driver/pull/184)
+  * Removes stray uses of `System.out.println` in favor of `java.util.logging`. [(PR BetterCloud#178)](https://github.com/BetterCloud/vault-java-driver/pull/178)
+  * Adds the enum constant `MountType.KEY_VALUE_V2`.  [(PR BetterCloud#182)](https://github.com/BetterCloud/vault-java-driver/pull/182)
 
 * **4.1.0**:  This release contains the following updates:
-  * Support for JWT authentication, for use by Kubernetes and other JWT-based authentication providers.  [(PR #164)](https://github.com/BetterCloud/vault-java-driver/pull/164)
-  * Updates the lease revoke method, to support changes in the underlying Vault API.  [(PR #163)](https://github.com/BetterCloud/vault-java-driver/pull/163)
+  * Support for JWT authentication, for use by Kubernetes and other JWT-based authentication providers.  [(PR BetterCloud#164)](https://github.com/BetterCloud/vault-java-driver/pull/164)
+  * Updates the lease revoke method, to support changes in the underlying Vault API.  [(PR BetterCloud#163)](https://github.com/BetterCloud/vault-java-driver/pull/163)
   * Changes the `VaultConfig.secretsEnginePathMap(...)` method from default access level to `public`, to allow for manual
-    setting [(PR #164)](https://github.com/BetterCloud/vault-java-driver/pull/156)
-  * Adds the nonce value to `AuthResponse`, to facilitate re-authentication with Vault via AWS.  [(PR #168)](https://github.com/BetterCloud/vault-java-driver/pull/168)
+    setting [(PR BetterCloud#164)](https://github.com/BetterCloud/vault-java-driver/pull/156)
+  * Adds the nonce value to `AuthResponse`, to facilitate re-authentication with Vault via AWS.  [(PR BetterCloud#168)](https://github.com/BetterCloud/vault-java-driver/pull/168)
   * Establishes a `module-info` file, updates the JDK requirement for building this library to Java 9 (although the built
-    library artifact remains compatible as a dependency in Java 8 projects).  [(PR #165)](https://github.com/BetterCloud/vault-java-driver/pull/165)
+    library artifact remains compatible as a dependency in Java 8 projects).  [(PR BetterCloud#165)](https://github.com/BetterCloud/vault-java-driver/pull/165)
   * Updates Gradle, and various test dependencies to their latest versions.  Integration tests now target Vault 1.1.3.
 
 * **4.0.0**:  This is a breaking-change release, with two primary updates:
