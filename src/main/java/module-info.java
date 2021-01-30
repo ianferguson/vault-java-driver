@@ -1,8 +1,8 @@
 module vault.java.driver {
     requires java.logging;
-    exports com.bettercloud.vault;
-    exports com.bettercloud.vault.api;
-    exports com.bettercloud.vault.json;
-    exports com.bettercloud.vault.response;
-    exports com.bettercloud.vault.rest;
+    exports io.ianferguson.vault;
+    exports io.ianferguson.vault.api;
+    exports io.ianferguson.vault.json;
+    exports io.ianferguson.vault.response;
+    exports io.ianferguson.vault.rest;
 }
