@@ -2,16 +2,12 @@ language: java
 
 dist: focal
 
-services:
-  - docker
-
-matrix:
-  include:
-    - jdk: openjdk15
-    - jdk: openjdk12
-    - jdk: openjdk11
-    - jdk: openjdk9
-    - jdk: openjdk8
+jdk:
+  - openjdk15
+  - openjdk12
+  - openjdk11
+  - openjdk9
+  - openjdk8
 
 script:
   - mvn clean install
