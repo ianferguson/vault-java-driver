@@ -5,7 +5,7 @@ apply plugin: 'checkstyle'
 
 group 'io.ianferguson'
 archivesBaseName = 'vault-java-driver'
-version '6.0.0'
+version '6.0.0-SNAPSHOT'
 ext.isReleaseVersion = !version.endsWith('SNAPSHOT')
 
 // This project is actually limited to Java 8 compatibility.  See below.
