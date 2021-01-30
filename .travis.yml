@@ -19,7 +19,8 @@ matrix:
     - jdk: openjdk15
     - jdk: openjdk12
     - jdk: openjdk11
-    - jdk: openjdk9
+    # Java 9 cannot build the project: https://github.com/gradle/gradle/issues/15267
+    # - jdk: openjdk9
 
 script:
   - ./gradlew build integrationTest -s --info
