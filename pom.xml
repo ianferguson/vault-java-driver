@@ -260,6 +260,20 @@
                 </sources>
               </configuration>
             </execution>
+            <execution>
+              <id>add-test-resource</id>
+              <phase>process-resources</phase>
+              <goals>
+                <goal>add-test-resource</goal>
+              </goals>
+              <configuration>
+                <resources>
+                  <resource>
+                    <directory>src/test-integration/resources</directory>
+                  </resource>
+                </resources>
+              </configuration>
+            </execution>
           </executions>
         </plugin>
         <plugin>
