@@ -11,9 +11,6 @@ alike, without causing conflicts with any other dependency.
 NOTE:  Although the binary artifact produced by the project is backwards-compatible with Java 8, you do need
        JDK 9 or higher to modify or build the source code of this library itself.
 
-This Change
------------
-
 Table of Contents
 -----------------
 * [Installing the Driver](#installing-the-driver)
@@ -270,6 +267,9 @@ Version History
 Note that changes to the major version (i.e. the first number) represent possible breaking changes, and
 may require modifications in your code to migrate.  Changes to the minor version (i.e. the second number)
 should represent non-breaking changes.  The third number represents any very minor bugfix patches.
+
+* **6.1.0**: This release contains the following updates:
+  * Include `X-Vault-Request: true` header on all requests to work with Vault Agent's w/ `require_request_header` set to true. [(PR #3)](https://github.com/ianferguson/vault-java-driver/pull/3)
 
 * **6.0.0**: This release contains the following updates:
   * Inaugural release of ianferguson/vault-java-driver fork
