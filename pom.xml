@@ -95,12 +95,6 @@
 
   <build>
     <plugins>
-      <!-- target Java 9 -->
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
@@ -137,14 +131,16 @@
             <source>1.8</source>
             <target>1.8</target>
             <compilerArgs>
-              <!--
-                   Make includes/excludes fully work:
-                   https://issues.apache.org/jira/browse/MCOMPILER-174
-                   (Compare what guava-gwt has to do for maven-javadoc-plugin.)
-              -->
-              <arg>-sourcepath</arg>
-              <arg>doesnotexist</arg>
+              <arg>-XDcompilePolicy=simple</arg>
+              <arg>-Xplugin:ErrorProne</arg>
             </compilerArgs>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_core</artifactId>
+                <version>2.5.1</version>
+              </path>
+            </annotationProcessorPaths>
           </configuration>
         </plugin>
         <plugin>
