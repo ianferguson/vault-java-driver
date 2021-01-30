@@ -274,6 +274,7 @@ should represent non-breaking changes.  The third number represents any very min
 * **6.0.0**: This release contains the following updates:
   * Inaugural release of ianferguson/vault-java-driver fork
   * Move code packages and maven groupdId from com.bettercloud to io.ianferguson [(PR #1)](https://github.com/ianferguson/vault-java-driver/pull/1)
+  * Switch from Gradle to Maven for builds [(PR #2)](https://github.com/ianferguson/vault-java-driver/pull/1)
   * No code changes
 
 * **5.1.0**:  This release contains the following updates:
