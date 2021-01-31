@@ -5,7 +5,7 @@
   <groupId>io.ianferguson</groupId>
   <artifactId>vault-java-driver</artifactId>
   <packaging>jar</packaging>
-  <version>6.0.0-rc1-SNAPSHOT</version>
+  <version>6.0.0-rc1</version>
   <name>vault-java-driver</name>
   <url>http://maven.apache.org</url>
 
