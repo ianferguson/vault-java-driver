@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.ianferguson</groupId>
   <artifactId>vault-java-driver</artifactId>
   <packaging>jar</packaging>
-  <version>6.0.0-rc3-SNAPSHOT</version>
+  <version>6.0.0-rc3</version>
   <name>vault-java-driver</name>
   <description>Zero-dependency Java client for HashiCorp's Vault</description>
   <url>http://maven.apache.org</url>
@@ -48,6 +47,7 @@
     <connection>scm:git:https://github.com/ianferguson/vault-java-driver.git</connection>
     <developerConnection>scm:git:git@github.com:ianferguson/vault-java-driver.git</developerConnection>
     <url>https://github.com/ianferguson/vault-java-driver</url>
+    <tag>vault-java-driver-6.0.0-rc3</tag>
   </scm>
 
   <developers>
