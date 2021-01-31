@@ -24,4 +24,5 @@ cache {
 listener "tcp" {
   address = "0.0.0.0:8100"
   tls_disable = true
+  require_request_header = true
 }
