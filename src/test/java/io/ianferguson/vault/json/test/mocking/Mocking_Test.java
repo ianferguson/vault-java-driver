@@ -59,7 +59,8 @@ public class Mocking_Test {
 
     @Test
     public void mockParseException() {
-        Mockito.mock(ParseException.class);
+        Exception e = Mockito.mock(ParseException.class);
+        assertNotNull(e);
     }
 
 }

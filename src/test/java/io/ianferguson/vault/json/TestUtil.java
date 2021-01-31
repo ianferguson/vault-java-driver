@@ -30,7 +30,6 @@ import java.io.ObjectOutputStream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-
 @SuppressWarnings("PMD")
 class TestUtil {
 
@@ -83,6 +82,7 @@ class TestUtil {
         return outputStream.toByteArray();
     }
 
+    @SuppressWarnings("BanSerializableRead")
     private static Object deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
         ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
         return new ObjectInputStream(inputStream).readObject();
