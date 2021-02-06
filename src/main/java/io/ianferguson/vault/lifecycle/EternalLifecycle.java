@@ -17,22 +17,23 @@ public final class EternalLifecycle implements Runnable {
     private static final Logger LOG =  Logger.getLogger(EternalLifecycle.class.getCanonicalName());
 
     private static final double GRACE_FACTOR = 0.1;
-    private static final double RENEW_WAIT_PROPORTION = 3.0/5.0;
+    private static final double RENEW_WAIT_PROPORTION = 2.0/3.0;
 
     private final Login login;
     private final Renew renew;
     private final AtomicReference<AuthResponse> tokenRef;
-    private final Random random = new Random();
+    private final Random random;
 
     private final Clock clock;
     private final Sleep sleep;
 
-    EternalLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep) {
+    EternalLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
         this.login = login;
         this.renew = renew;
         this.tokenRef = new AtomicReference<>(token);
         this.sleep = sleep;
         this.clock = clock;
+        this.random = random;
     }
 
     @Override
@@ -130,7 +131,7 @@ public final class EternalLifecycle implements Runnable {
 
     public static EternalLifecycle start(LifecycleConfig config) throws VaultException {
         final AuthResponse token = config.login.login();
-        return new EternalLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep());
+        return new EternalLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep(), new Random());
     }
 
 }

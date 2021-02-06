@@ -7,7 +7,6 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
@@ -22,69 +21,94 @@ import io.ianferguson.vault.VaultException;
 import io.ianferguson.vault.response.AuthResponse;
 import io.ianferguson.vault.rest.RestResponse;
 
+import static org.junit.Assert.assertTrue;
+
 public class LifecycleTest {
 
     private static final TestClock CLOCK = new TestClock();
 
     @Test
     public void test() throws VaultException, InterruptedException, ExecutionException {
+        // the random number generators used throughout the tests are kept stable, but the actual
+        // tests are still not stable -- the clock action isn't centrally gated and runs as
+        // fast as the computer will run that particular thread
+        final long seed = 2948468929534380l;
+        final Randoms randoms = new Randoms(seed);
 
         final Sleep sleep = spinSleep(CLOCK);
-
-        final Logins logins = Logins.create();
-
+        final Logins logins = Logins.create(randoms.get());
         final Login login = logins::login;
         final Renew renew = token -> {
             return logins.renew(token.getAuthClientToken());
         };
-
         final AuthResponse token = login.login();
-        final EternalLifecycle lifecycle = new EternalLifecycle(login, renew, token, CLOCK, sleep);
+        final EternalLifecycle lifecycle = new EternalLifecycle(login, renew, token, CLOCK, sleep, randoms.get());
 
-        final ExecutorService executor = Executors.newSingleThreadExecutor();
-        final Future<?> future = executor.submit(lifecycle);
+        final ExecutorService executor = Executors.newCachedThreadPool(r -> {
+            final Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+        });
 
+        final Future<?> lifecycleFuture = executor.submit(lifecycle);
+
+        final Random clockRandomizer = randoms.get();
+        executor.submit(() -> {
+            while (true) {
+                // advance the clock on average, but not exactly, 5 milliseconds each tick
+                CLOCK.advance(Duration.ofNanos(clockRandomizer.nextInt(10000000)));
+            }
+        });
+
+        // continually read the current token and validate if it is still valid
         final Instant end = CLOCK.instant().plus(Duration.ofDays(8));
-        final Random random = new Random();
+        long validToken = 0;
+        long invalidToken = 0;
         while (CLOCK.instant().isBefore(end)) {
-            //  Thread.sleep(0, 1);
-            // advance the clock on average, but not exactly, a millisecond each tick
-            CLOCK.advance(Duration.ofNanos(random.nextInt(2000000)));
+            final String id = lifecycle.getToken().getAuthClientToken();
+            if (logins.isValid(id)) {
+                validToken++;
+            } else {
+                invalidToken++;
+            }
         }
 
-        // throw off any exception that came up in the runnable
-        future.cancel(true);
-        try {
-            future.get();
-        } catch (CancellationException e) {
-            // expected
-        }
-
-
+        // print statistics
         final long tokenCount = logins.tokens.size();
         long renewalCount = 0;
         for (Token t : logins.tokens.values()) {
             renewalCount += t.numberOfRenewals;
             System.out.println(t);
         }
-        final double renewalsPerToken = (double) renewalCount / (double) tokenCount;
+        final String renewalsPerToken = String.format("%,.2f", (double) renewalCount / (double) tokenCount);
         System.out.println("Created " + tokenCount + " tokens, and averaged " + renewalsPerToken + " renewals per token");
+        final long totalCalls = validToken + invalidToken;
+        final double percent = validToken / (double) totalCalls;
+        final String percentString = String.format("%,.2f", percent * 100);
+        System.out.println(percentString + "% of client token uses were valid (" + validToken + "/" + totalCalls + ")");
+
+        assertTrue(percent > 0.999);
+
+        // check for errors
+        if (lifecycleFuture.isDone()) {
+            lifecycleFuture.get();
+        }
     }
 
     private static final class Logins {
-
         // TKTK make timing tunable for tests
         // TKTK make MaxTTL an option
         private static final Duration oneHour = Duration.ofHours(1);
         private static final Duration fiveMinutes = Duration.ofMinutes(5);
         private static final double failureRate = 0.2;
 
-        private final Random random = new Random();
         private final ConcurrentMap<String, Token> tokens = new ConcurrentHashMap<>();
         private final Clock clock;
+        private final Random random;
 
-        Logins(Clock clock) {
+        Logins(Random random, Clock clock) {
             this.clock = clock;
+            this.random = random;
         }
 
         AuthResponse login() throws VaultException {
@@ -116,8 +140,12 @@ public class LifecycleTest {
             return renewedToken.asAuthResponse();
         }
 
-        public static Logins create() {
-            return new Logins(CLOCK);
+        boolean isValid(String id) {
+            return this.tokens.get(id).expiresAt.isAfter(CLOCK.instant());
+        }
+
+        public static Logins create(Random random) {
+            return new Logins(random, CLOCK);
         }
 
         private void simulateInstability() throws VaultException {
@@ -225,6 +253,20 @@ public class LifecycleTest {
 
         void println(String line) {
             System.out.println("[" + instant().truncatedTo(ChronoUnit.SECONDS) + "] " + line);
+        }
+
+    }
+
+    private static final class Randoms {
+
+        private Random random;
+
+        Randoms(long seed) {
+            this.random = new Random(seed);
+        }
+
+        public Random get() {
+            return new Random(this.random.nextLong());
         }
 
     }
