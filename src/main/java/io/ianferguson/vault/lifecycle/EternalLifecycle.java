@@ -4,7 +4,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,7 +23,7 @@ public final class EternalLifecycle implements Runnable {
 
     private final Login login;
     private final Renew renew;
-    private final AtomicReference<AuthResponse> tokenRef;
+    private final AtomicReference<TokenWithExpiration> tokenRef;
     private final Random random;
 
     private final Clock clock;
@@ -30,27 +32,40 @@ public final class EternalLifecycle implements Runnable {
     EternalLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
         this.login = login;
         this.renew = renew;
-        this.tokenRef = new AtomicReference<>(token);
         this.sleep = sleep;
         this.clock = clock;
         this.random = random;
+        final TokenWithExpiration tokenWithExpiration = (token != null) ?  addExpiration(clock.instant(), token) : null;
+        this.tokenRef = new AtomicReference<>(tokenWithExpiration);
     }
 
     @Override
     public void run() {
         for (;;) {
             try {
-                final AuthResponse token = this.tokenRef.get();
-                final Duration remaining = Duration.ofSeconds(token.getAuthLeaseDuration());
-                final Duration gracePeriod = calculateGrace(remaining);
-                Instant expiration = this.clock.instant().plus(remaining);
+                final TokenWithExpiration tokenWithExpiration = this.tokenRef.get();
+                // tokenRef will return null on the first run if the caller did no initiate the login on their own (to
+                // surface errors directly at startup, for instance)
+                if (tokenWithExpiration == null) {
+                    this.tokenRef.set(acquireStubbornly());
+                }
+                final AuthResponse token = tokenWithExpiration.token;
+                Instant expiration = tokenWithExpiration.expiration;
+                Duration gracePeriod = calculateGrace(Duration.between(this.clock.instant(), expiration));
+
                 while (true) {
                     if (token.isAuthRenewable()) {
                         try {
-                            final AuthResponse renewed = this.renew.renew(token);
+                            final Instant now = this.clock.instant();
+                            final TokenWithExpiration renewed = addExpiration(now, this.renew.renew(token));
+                            expiration = renewed.expiration;
                             this.tokenRef.set(renewed);
-                            final Duration newTTL = Duration.ofSeconds(renewed.getAuthLeaseDuration());
-                            expiration = this.clock.instant().plus(newTTL);
+
+                            // tokens renewal periods may change as they are renewed, as a result of MaxTTLs,
+                            // differing initial TTL vs renewal period configurations or changes of configuration
+                            // to the auth backend on the server.
+                            // Because of that, we recalculate our base "grace" period any time we get a new ttl from Vault
+                            gracePeriod = calculateGrace(Duration.between(now, expiration));
                         } catch (Exception e) {
                             LOG.log(Level.WARNING, "caught exception while renewing token", e);
                             // fall through and sleep for a while longer if we can
@@ -95,10 +110,13 @@ public final class EternalLifecycle implements Runnable {
 
     // acquireStubbornly will continually try to generate a new token lease forever
     // until it gets one
-    private AuthResponse acquireStubbornly() {
+    private TokenWithExpiration acquireStubbornly() {
         for (;;) {
             try {
-                return this.login.login();
+                final Instant now = this.clock.instant();
+                final TokenWithExpiration token = addExpiration(now, this.login.login());
+                tokenRef.set(token);
+                return token;
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "caught exception while logging in for token", e);
                 // TKTK properly handle interrupted exception here
@@ -126,12 +144,47 @@ public final class EternalLifecycle implements Runnable {
     }
 
     public AuthResponse getToken() {
-        return tokenRef.get();
+        final TokenWithExpiration token = tokenRef.get();
+        return (token != null) ? token.token : null;
     }
 
-    public static EternalLifecycle start(LifecycleConfig config) throws VaultException {
+    private static final class TokenWithExpiration {
+        private final AuthResponse token;
+        private final Instant expiration;
+
+        TokenWithExpiration(AuthResponse token, Instant expiration) {
+            this.token = token;
+            this.expiration = expiration;
+        }
+    }
+
+    // now is passed as an argument to capture time before the renewal call because we pessimistically
+    // assume any latency on the network call happened while the token is being sent back and should be counted againstthe TTL;
+    private TokenWithExpiration addExpiration(Instant now, AuthResponse token) {
+        final Duration ttl = Duration.ofSeconds(token.getAuthLeaseDuration());
+        final Instant expiration = now.plus(ttl);
+        return new TokenWithExpiration(token, expiration);
+    }
+
+    public static EternalLifecycle loginAndCreate(LifecycleConfig config) throws VaultException {
         final AuthResponse token = config.login.login();
         return new EternalLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep(), new Random());
+    }
+
+    public static EternalLifecycle create(LifecycleConfig config) {
+        return new EternalLifecycle(config.login, config.renew, null, Clock.systemUTC(), new WallClockSleep(), new Random());
+    }
+
+    // startDaemonThread starts an EternalLifecycle manger on a daemon thread and will persistently
+    // try to login and then renew the token. It returns a thread safe Supplier that can be read
+    // to get the most recently valid Vault token
+    public static Supplier<AuthResponse> startDaemonThread(LifecycleConfig config) {
+        final EternalLifecycle lifecycle = create(config);
+        final Thread t = new Thread(lifecycle);
+        t.setName("vault-lifecycle-daemon-"+UUID.randomUUID().toString());
+        t.setDaemon(true);
+        t.run();
+        return () -> lifecycle.tokenRef.get().token;
     }
 
 }

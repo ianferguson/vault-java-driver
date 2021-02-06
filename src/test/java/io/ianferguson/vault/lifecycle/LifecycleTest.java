@@ -41,8 +41,7 @@ public class LifecycleTest {
         final Renew renew = token -> {
             return logins.renew(token.getAuthClientToken());
         };
-        final AuthResponse token = login.login();
-        final EternalLifecycle lifecycle = new EternalLifecycle(login, renew, token, CLOCK, sleep, randoms.get());
+        final EternalLifecycle lifecycle = new EternalLifecycle(login, renew, null, CLOCK, sleep, randoms.get());
 
         final ExecutorService executor = Executors.newCachedThreadPool(r -> {
             final Thread t = new Thread(r);
@@ -55,8 +54,9 @@ public class LifecycleTest {
         final Random clockRandomizer = randoms.get();
         executor.submit(() -> {
             while (true) {
-                // advance the clock on average, but not exactly, 5 milliseconds each tick
-                CLOCK.advance(Duration.ofNanos(clockRandomizer.nextInt(10000000)));
+                // advance the clock on average, but not exactly, 1 minute each tick
+                Thread.sleep(1);
+                CLOCK.advance(Duration.ofSeconds(clockRandomizer.nextInt(120)));
             }
         });
 
@@ -65,7 +65,13 @@ public class LifecycleTest {
         long validToken = 0;
         long invalidToken = 0;
         while (CLOCK.instant().isBefore(end)) {
-            final String id = lifecycle.getToken().getAuthClientToken();
+            final AuthResponse token = lifecycle.getToken();
+            if (token == null) {
+                invalidToken++;
+                continue;
+            }
+
+            final String id = token.getAuthClientToken();
             if (logins.isValid(id)) {
                 validToken++;
             } else {
@@ -99,7 +105,7 @@ public class LifecycleTest {
         // TKTK make timing tunable for tests
         // TKTK make MaxTTL an option
         private static final Duration oneHour = Duration.ofHours(1);
-        private static final Duration fiveMinutes = Duration.ofMinutes(5);
+        private static final Duration twentyMinutes = Duration.ofMinutes(20);
         private static final double failureRate = 0.2;
 
         private final ConcurrentMap<String, Token> tokens = new ConcurrentHashMap<>();
@@ -135,7 +141,7 @@ public class LifecycleTest {
                 throw new VaultException(msg, 403);
             }
 
-            final Token renewedToken = token.renewFor(oneHour);
+            final Token renewedToken = token.renewFor(twentyMinutes);
             tokens.put(id, renewedToken);
             return renewedToken.asAuthResponse();
         }
