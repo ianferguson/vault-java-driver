@@ -41,7 +41,7 @@ public class LifecycleTest {
         final Renew renew = token -> {
             return logins.renew(token.getAuthClientToken());
         };
-        final EternalLifecycle lifecycle = new EternalLifecycle(login, renew, null, CLOCK, sleep, randoms.get());
+        final ContinualLifecycle lifecycle = new ContinualLifecycle(login, renew, null, CLOCK, sleep, randoms.get());
 
         final ExecutorService executor = Executors.newCachedThreadPool(r -> {
             final Thread t = new Thread(r);
