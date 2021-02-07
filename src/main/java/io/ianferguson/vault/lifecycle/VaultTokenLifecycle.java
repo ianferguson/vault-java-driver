@@ -12,10 +12,28 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.ianferguson.vault.VaultException;
 import io.ianferguson.vault.response.AuthResponse;
 
-// https://github.com/hashicorp/vault/blob/b2927012ba9131f68606debec13bfc221b221912/vendor/github.com/hashicorp/vault/api/lifetime_watcher.go#L49-L93
+/**
+ * EXPERIMENTAL! use at your own risk, this is an alpha testing/experimental package that may include breaking changes
+ * in minor version.
+ *
+ * VaultTokenLifecycle manages the login and renewal of vault tokens for an application indefintely. somewhat based on:
+ * https://github.com/hashicorp/vault/blob/b2927012ba9131f68606debec13bfc221b221912/vendor/github.com/hashicorp/vault/api/lifetime_watcher.go#L49-L93
+ *
+ * Usage:
+ * ```
+ * final VaultConfig config = new VaultConfig();
+ * final Vault vault = new Vault(config);
+ *
+ * final Supplier<AuthResponse> tokens = VaultTokenLifecycle,asDaemonThread()
+ * config.token(tokens.get().getAuthClientToken());
+ * ```
+ * TKTK: alternatively, this could be wired to update a VaultConfig object in place, since the current
+ * Vault objects embed the mutable VaultConfig objects they take in place (though it would require marking some things
+ * volatile) -- that might make a better user experience, as the use could potentially get a single vault client
+ * and have the tokens auto updated in the background rather than needing to create a new client or config per call.
+ */
 public final class VaultTokenLifecycle implements Runnable {
 
     private static final Logger LOG =  Logger.getLogger(VaultTokenLifecycle.class.getCanonicalName());
@@ -26,27 +44,21 @@ public final class VaultTokenLifecycle implements Runnable {
     private final Login login;
     private final Renew renew;
     private final AtomicReference<TokenWithExpiration> tokenRef;
-    private final Random random;
+    final Random random;
 
     private final Clock clock;
     private final Sleep sleep;
 
     private final CountDownLatch tokenInitialized;
 
-    VaultTokenLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
+    VaultTokenLifecycle(Login login, Renew renew, Clock clock, Sleep sleep, Random random) {
         this.login = login;
         this.renew = renew;
         this.sleep = sleep;
         this.clock = clock;
         this.random = random;
         this.tokenInitialized = new CountDownLatch(1);
-
-        if (token != null) {
-            this.tokenRef = new AtomicReference<>(addExpiration(clock.instant(), token));
-            tokenInitialized.countDown();
-        } else {
-            this.tokenRef = new AtomicReference<>(null);
-        }
+        this.tokenRef = new AtomicReference<>(null);
     }
 
     // getTokenSupplier blocks until a token is available and then return
@@ -144,7 +156,7 @@ public final class VaultTokenLifecycle implements Runnable {
     // acquireStubbornly will continually try to generate a new token lease forever
     // until it gets one
     private TokenWithExpiration acquireStubbornly() throws InterruptedException {
-        ExponentialBackoff backoff = new ExponentialBackoff(sleep, Duration.ofSeconds(1), Duration.ofMinutes(8));
+        ExponentialBackoff backoff = new ExponentialBackoff(this, sleep, Duration.ofSeconds(1), Duration.ofMinutes(8));
         for (;;) {
             try {
                 final Instant now = this.clock.instant();
@@ -155,37 +167,6 @@ public final class VaultTokenLifecycle implements Runnable {
                 continue;
             }
         }
-    }
-
-    private final class ExponentialBackoff {
-        private final Duration length;
-        private final Duration max;
-        private final Sleep sleep;
-
-        ExponentialBackoff(Sleep sleep, Duration length, Duration max) {
-            this.sleep = sleep;
-            this.length = jitter(length);
-            this.max = max;
-        }
-
-        public ExponentialBackoff chill() throws InterruptedException {
-            sleep.sleep(length);
-            final Duration candidate = length.multipliedBy(2);
-            final Duration next = (max.minus(candidate).isNegative()) ? max : candidate;
-            return new ExponentialBackoff(sleep, next, max);
-        }
-
-        Duration duration() {
-            return length;
-        }
-
-        // jitter all times by 0-10%
-        private Duration jitter(Duration duration) {
-            final long ms = duration.toMillis();
-            final double jitter = ms * VaultTokenLifecycle.this.random.nextDouble() * 0.1;
-            return Duration.ofMillis(ms + (long) jitter);
-        }
-
     }
 
     // uses same logic as Hashicorp SDK
@@ -223,13 +204,8 @@ public final class VaultTokenLifecycle implements Runnable {
         return new TokenWithExpiration(token, expiration);
     }
 
-    public static VaultTokenLifecycle loginAndCreate(LifecycleConfig config) throws VaultException {
-        final AuthResponse token = config.login.login();
-        return new VaultTokenLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep(), new Random());
-    }
-
     public static VaultTokenLifecycle create(LifecycleConfig config) {
-        return new VaultTokenLifecycle(config.login, config.renew, null, Clock.systemUTC(), new WallClockSleep(), new Random());
+        return new VaultTokenLifecycle(config.login, config.renew, Clock.systemUTC(), new WallClockSleep(), new Random());
     }
 
     // asDaemonThread blocks while it starts an EternalLifecycle manger on a daemon thread and will persistently
