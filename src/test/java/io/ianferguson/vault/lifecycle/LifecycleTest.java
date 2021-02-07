@@ -1,5 +1,6 @@
 package io.ianferguson.vault.lifecycle;
 
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,7 +19,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-
+import java.util.logging.LogManager;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import io.ianferguson.vault.VaultException;
@@ -29,6 +31,11 @@ import static org.junit.Assert.assertTrue;
 
 public class LifecycleTest {
 
+    @BeforeClass
+    public static void configureLogger() throws SecurityException, IOException {
+        System.setProperty("java.util.logging.config.file", ClassLoader.getSystemResource("logging.properties").getPath());
+        LogManager.getLogManager().readConfiguration();
+    }
 
     @Test
     public void test() throws VaultException, InterruptedException, ExecutionException {
