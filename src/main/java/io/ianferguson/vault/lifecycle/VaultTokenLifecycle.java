@@ -33,6 +33,35 @@ import io.ianferguson.vault.response.AuthResponse;
  * Vault objects embed the mutable VaultConfig objects they take in place (though it would require marking some things
  * volatile) -- that might make a better user experience, as the use could potentially get a single vault client
  * and have the tokens auto updated in the background rather than needing to create a new client or config per call.
+ *
+ * Perhaps this can be done flexibly by allowing things to register Consumer<AuthResponse> as call backs that are
+ * called whenever a token is renewed or logged in -- the internal tokenRef.set call could even just be a callback
+ * at that point as well:
+ *
+ *
+    private static final class UpdateTokenOnChange implements Consumer<AuthResponse> {
+
+        private final VaultConfig config;
+
+        UpdateTokenOnChange(VaultConfig config) {
+            this.config = config;
+        }
+
+        @Override
+        public void accept(AuthResponse t) {
+            config.token(t.getAuthClientToken())
+        }
+
+    }
+ *
+ * and then the user would do:
+ * final VaultConfig config = new VaultConfig();
+ * lifecycle.register(UpdateTokenOnChange(config));
+ * final Vault vault = new Vault(config);
+ *
+ * there is yet another option of having this lifecycle watcher take a vault config and init clients itself, but
+ * I think the callbacks approach probably is the right balance for now
+ *
  */
 public final class VaultTokenLifecycle implements Runnable {
 
@@ -44,7 +73,7 @@ public final class VaultTokenLifecycle implements Runnable {
     private final Login login;
     private final Renew renew;
     private final AtomicReference<TokenWithExpiration> tokenRef;
-    final Random random;
+    private final Random random;
 
     private final Clock clock;
     private final Sleep sleep;
