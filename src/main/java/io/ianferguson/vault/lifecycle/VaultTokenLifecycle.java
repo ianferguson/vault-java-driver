@@ -131,14 +131,19 @@ public final class VaultTokenLifecycle implements Runnable {
                         try {
                             final Instant now = this.clock.instant();
                             final TokenWithExpiration renewed = addExpiration(now, this.renew.renew(token));
-                            expiration = renewed.expiration;
-                            this.tokenRef.set(renewed);
 
                             // tokens renewal periods may change as they are renewed, as a result of MaxTTLs,
                             // differing initial TTL vs renewal period configurations or changes of configuration
                             // to the auth backend on the server.
+                            //
                             // Because of that, we recalculate our base "grace" period any time we get a new ttl from Vault
-                            gracePeriod = calculateGrace(Duration.between(now, expiration));
+                            // but because our "expiration" times on tokens are fuzzy guesses, we only treat an expiration
+                            // as "new" if it is at least a minute older than the previous expiration high watermark
+                            if (true || renewed.expiration.isAfter(expiration.plus(Duration.ofMinutes(1)))) {
+                                gracePeriod = calculateGrace(Duration.between(now, expiration));
+                            }
+                            expiration = renewed.expiration;
+                            this.tokenRef.set(renewed);
                         } catch (Exception e) {
                             LOG.log(Level.WARNING, "caught exception while renewing token", e);
                             // fall through and sleep for a while longer if we can
@@ -223,6 +228,40 @@ public final class VaultTokenLifecycle implements Runnable {
             this.token = token;
             this.expiration = expiration;
         }
+    }
+
+    private final class ExponentialBackoff {
+
+        private final VaultTokenLifecycle vaultTokenLifecycle;
+        private final Duration length;
+        private final Duration max;
+        private final Sleep sleep;
+
+        ExponentialBackoff(VaultTokenLifecycle vaultTokenLifecycle, Sleep sleep, Duration length, Duration max) {
+            this.vaultTokenLifecycle = vaultTokenLifecycle;
+            this.sleep = sleep;
+            this.length = jitter(length);
+            this.max = max;
+        }
+
+        public ExponentialBackoff chill() throws InterruptedException {
+            sleep.sleep(length);
+            final Duration candidate = length.multipliedBy(2);
+            final Duration next = (max.minus(candidate).isNegative()) ? max : candidate;
+            return new ExponentialBackoff(this.vaultTokenLifecycle, sleep, next, max);
+        }
+
+        Duration duration() {
+            return length;
+        }
+
+        // jitter all times by 0-10%
+        private Duration jitter(Duration duration) {
+            final long ms = duration.toMillis();
+            final double jitter = ms * this.vaultTokenLifecycle.random.nextDouble() * 0.1;
+            return Duration.ofMillis(ms + (long) jitter);
+        }
+
     }
 
     // now is passed as an argument to capture time before the renewal call because we pessimistically

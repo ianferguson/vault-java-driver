@@ -54,7 +54,7 @@ public class LifecycleTest {
             return logins.renew(token.getAuthClientToken());
         };
 
-        final VaultTokenLifecycle lifecycle = new VaultTokenLifecycle(login, renew, null, clock, sleep, randoms.get());
+        final VaultTokenLifecycle lifecycle = new VaultTokenLifecycle(login, renew, clock, sleep, randoms.get());
 
         final ExecutorService executor = Executors.newCachedThreadPool(r -> {
             final Thread t = new Thread(r);
@@ -104,10 +104,10 @@ public class LifecycleTest {
         // TKTK make timing tunable for tests
         // TKTK make MaxTTL an option
         private static final Duration oneHour = Duration.ofHours(1);
-        private static final Duration twentyMinutes = Duration.ofMinutes(20);
+        private static final Duration tenMinutes = Duration.ofMinutes(10);
 
         // fail 20% of vault renewals and logins during this test
-        private static final double failureRate = 0.2;
+        private static final double failureRate = 0.15;
 
         private final ConcurrentMap<String, Token> tokens = new ConcurrentHashMap<>();
         private final Clock clock;
@@ -142,7 +142,7 @@ public class LifecycleTest {
                 throw new VaultException(msg, 403);
             }
 
-            final Token renewedToken = token.renewFor(twentyMinutes);
+            final Token renewedToken = token.renewFor(tenMinutes);
             tokens.put(id, renewedToken);
             return renewedToken.asAuthResponse(this.clock.instant());
         }
