@@ -16,9 +16,9 @@ import io.ianferguson.vault.VaultException;
 import io.ianferguson.vault.response.AuthResponse;
 
 // https://github.com/hashicorp/vault/blob/b2927012ba9131f68606debec13bfc221b221912/vendor/github.com/hashicorp/vault/api/lifetime_watcher.go#L49-L93
-public final class ContinualLifecycle implements Runnable {
+public final class VaultTokenLifecycle implements Runnable {
 
-    private static final Logger LOG =  Logger.getLogger(ContinualLifecycle.class.getCanonicalName());
+    private static final Logger LOG =  Logger.getLogger(VaultTokenLifecycle.class.getCanonicalName());
 
     private static final double GRACE_FACTOR = 0.1;
     private static final double RENEW_WAIT_PROPORTION = 2.0/3.0;
@@ -33,7 +33,7 @@ public final class ContinualLifecycle implements Runnable {
 
     private final CountDownLatch tokenInitialized;
 
-    ContinualLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
+    VaultTokenLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
         this.login = login;
         this.renew = renew;
         this.sleep = sleep;
@@ -191,13 +191,13 @@ public final class ContinualLifecycle implements Runnable {
         return new TokenWithExpiration(token, expiration);
     }
 
-    public static ContinualLifecycle loginAndCreate(LifecycleConfig config) throws VaultException {
+    public static VaultTokenLifecycle loginAndCreate(LifecycleConfig config) throws VaultException {
         final AuthResponse token = config.login.login();
-        return new ContinualLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep(), new Random());
+        return new VaultTokenLifecycle(config.login, config.renew, token, Clock.systemUTC(), new WallClockSleep(), new Random());
     }
 
-    public static ContinualLifecycle create(LifecycleConfig config) {
-        return new ContinualLifecycle(config.login, config.renew, null, Clock.systemUTC(), new WallClockSleep(), new Random());
+    public static VaultTokenLifecycle create(LifecycleConfig config) {
+        return new VaultTokenLifecycle(config.login, config.renew, null, Clock.systemUTC(), new WallClockSleep(), new Random());
     }
 
     // asDaemonThread blocks while it starts an EternalLifecycle manger on a daemon thread and will persistently
@@ -205,7 +205,7 @@ public final class ContinualLifecycle implements Runnable {
     // to get the most recently valid Vault token.
     // The Callable will return once the initial login is complete.
     public static Supplier<AuthResponse> asDaemonThread(LifecycleConfig config) throws InterruptedException {
-        final ContinualLifecycle lifecycle = create(config);
+        final VaultTokenLifecycle lifecycle = create(config);
         final Thread t = new Thread(lifecycle);
         t.setName("vault-lifecycle-daemon-"+UUID.randomUUID().toString());
         t.setDaemon(true);
