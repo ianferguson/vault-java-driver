@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -29,25 +31,55 @@ public final class ContinualLifecycle implements Runnable {
     private final Clock clock;
     private final Sleep sleep;
 
+    private final CountDownLatch tokenInitialized;
+
     ContinualLifecycle(Login login, Renew renew, AuthResponse token, Clock clock, Sleep sleep, Random random) {
         this.login = login;
         this.renew = renew;
         this.sleep = sleep;
         this.clock = clock;
         this.random = random;
-        final TokenWithExpiration tokenWithExpiration = (token != null) ?  addExpiration(clock.instant(), token) : null;
-        this.tokenRef = new AtomicReference<>(tokenWithExpiration);
+        this.tokenInitialized = new CountDownLatch(1);
+
+        if (token != null) {
+            this.tokenRef = new AtomicReference<>(addExpiration(clock.instant(), token));
+            tokenInitialized.countDown();
+        } else {
+            this.tokenRef = new AtomicReference<>(null);
+        }
+    }
+
+    // getTokenSupplier blocks until a token is available and then return
+    // a threadsafe supplier of the most recently valid Vault token
+    public Supplier<AuthResponse> tokenSupplier() throws InterruptedException {
+        this.tokenInitialized.await();
+        return () -> {
+            return tokenRef.get().token;
+        };
+    }
+
+    // getTokenSupplier blocks up to timeout units long until a token is available and then return
+    // a threadsafe supplier of the most recently valid Vault token
+    public Supplier<AuthResponse> tokenSupplier(long timeout, TimeUnit unit) throws InterruptedException {
+        this.tokenInitialized.await(timeout, unit);
+        return () -> {
+            return tokenRef.get().token;
+        };
     }
 
     @Override
     public void run() {
         for (;;) {
             try {
-                final TokenWithExpiration tokenWithExpiration = this.tokenRef.get();
+                TokenWithExpiration tokenWithExpiration = this.tokenRef.get();
+
                 // tokenRef will return null on the first run if the caller did no initiate the login on their own (to
                 // surface errors directly at startup, for instance)
                 if (tokenWithExpiration == null) {
-                    this.tokenRef.set(acquireStubbornly());
+                    LOG.fine("acquiring first vault token");
+                    tokenWithExpiration = acquireStubbornly();
+                    this.tokenRef.set(tokenWithExpiration);
+                    tokenInitialized.countDown();
                 }
                 final AuthResponse token = tokenWithExpiration.token;
                 Instant expiration = tokenWithExpiration.expiration;
@@ -114,9 +146,7 @@ public final class ContinualLifecycle implements Runnable {
         for (;;) {
             try {
                 final Instant now = this.clock.instant();
-                final TokenWithExpiration token = addExpiration(now, this.login.login());
-                tokenRef.set(token);
-                return token;
+                return addExpiration(now, this.login.login());
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "caught exception while logging in for token", e);
                 // TKTK properly handle interrupted exception here
@@ -141,11 +171,6 @@ public final class ContinualLifecycle implements Runnable {
 
         final long grace = (long) (jitterRange + jitterGrace);
         return Duration.ofNanos(grace);
-    }
-
-    public AuthResponse getToken() {
-        final TokenWithExpiration token = tokenRef.get();
-        return (token != null) ? token.token : null;
     }
 
     private static final class TokenWithExpiration {
@@ -175,16 +200,17 @@ public final class ContinualLifecycle implements Runnable {
         return new ContinualLifecycle(config.login, config.renew, null, Clock.systemUTC(), new WallClockSleep(), new Random());
     }
 
-    // startDaemonThread starts an EternalLifecycle manger on a daemon thread and will persistently
-    // try to login and then renew the token. It returns a thread safe Supplier that can be read
-    // to get the most recently valid Vault token
-    public static Supplier<AuthResponse> startDaemonThread(LifecycleConfig config) {
+    // asDaemonThread blocks while it starts an EternalLifecycle manger on a daemon thread and will persistently
+    // try to login and then renew the token. It returns a Callable that will return a thread safe Supplier that can be read
+    // to get the most recently valid Vault token.
+    // The Callable will return once the initial login is complete.
+    public static Supplier<AuthResponse> asDaemonThread(LifecycleConfig config) throws InterruptedException {
         final ContinualLifecycle lifecycle = create(config);
         final Thread t = new Thread(lifecycle);
         t.setName("vault-lifecycle-daemon-"+UUID.randomUUID().toString());
         t.setDaemon(true);
         t.run();
-        return () -> lifecycle.tokenRef.get().token;
+        return lifecycle.tokenSupplier();
     }
 
 }

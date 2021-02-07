@@ -4,6 +4,6 @@ import java.time.Duration;
 
 interface Sleep {
 
-    void sleep(Duration duration);
+    void sleep(Duration duration) throws InterruptedException;
 
 }
