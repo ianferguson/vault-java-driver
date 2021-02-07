@@ -130,30 +130,62 @@ public final class VaultTokenLifecycle implements Runnable {
 
                     this.sleep.sleep(sleepDuration);
                 }
+
+                // if renewing has stopped due to a MaxTTL being hit, or due to upstream
+                // exceptions, or the underlying lease
+                // hitting a MaxTTL, generate a new instance of the token/lease
+                this.tokenRef.set(acquireStubbornly());
             } catch (Exception e) {
-                LOG.log(Level.SEVERE, "caught exception durin token renewal loop", e);
+                LOG.log(Level.SEVERE, "exception while getting or renewing vault token", e);
             }
-            // if renewing has stopped due to a MaxTTL being hit, or due to upstream
-            // exceptions, or the underlying lease
-            // hitting a MaxTTL, generate a new instance of the token/lease
-            this.tokenRef.set(acquireStubbornly());
         }
     }
 
     // acquireStubbornly will continually try to generate a new token lease forever
     // until it gets one
-    private TokenWithExpiration acquireStubbornly() {
+    private TokenWithExpiration acquireStubbornly() throws InterruptedException {
+        ExponentialBackoff backoff = new ExponentialBackoff(sleep, Duration.ofSeconds(1), Duration.ofMinutes(8));
         for (;;) {
             try {
                 final Instant now = this.clock.instant();
                 return addExpiration(now, this.login.login());
             } catch (Exception e) {
-                LOG.log(Level.WARNING, "caught exception while logging in for token", e);
-                // TKTK properly handle interrupted exception here
-                // TKTK exponential backoff/wait
+                LOG.log(Level.SEVERE, "caught exception while logging in for token, waiting " + backoff.duration().toMillis() + " ms before trying again", e);
+                backoff = backoff.chill();
                 continue;
             }
         }
+    }
+
+    private final class ExponentialBackoff {
+        private final Duration length;
+        private final Duration max;
+        private final Sleep sleep;
+
+        ExponentialBackoff(Sleep sleep, Duration length, Duration max) {
+            this.sleep = sleep;
+            this.length = jitter(length);
+            this.max = max;
+        }
+
+        public ExponentialBackoff chill() throws InterruptedException {
+            sleep.sleep(length);
+            final Duration candidate = length.multipliedBy(2);
+            final Duration next = (max.minus(candidate).isNegative()) ? max : candidate;
+            return new ExponentialBackoff(sleep, next, max);
+        }
+
+        Duration duration() {
+            return length;
+        }
+
+        // jitter all times by 0-10%
+        private Duration jitter(Duration duration) {
+            final long ms = duration.toMillis();
+            final double jitter = ms * VaultTokenLifecycle.this.random.nextDouble() * 0.1;
+            return Duration.ofMillis(ms + (long) jitter);
+        }
+
     }
 
     // uses same logic as Hashicorp SDK
