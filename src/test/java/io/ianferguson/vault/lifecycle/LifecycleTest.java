@@ -40,11 +40,13 @@ public class LifecycleTest {
         final Randoms randoms = new Randoms(seed);
 
         final Sleep sleep = clock::latchFor;
+
         final Logins logins = Logins.create(randoms.get(), clock);
         final Login login = logins::login;
         final Renew renew = token -> {
             return logins.renew(token.getAuthClientToken());
         };
+
         final ContinualLifecycle lifecycle = new ContinualLifecycle(login, renew, null, clock, sleep, randoms.get());
 
         final ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -75,7 +77,6 @@ public class LifecycleTest {
         long renewalCount = 0;
         for (Token t : logins.tokens.values()) {
             renewalCount += t.numberOfRenewals;
-            System.out.println(t);
         }
         final String renewalsPerToken = String.format("%,.2f", (double) renewalCount / (double) tokenCount);
         System.out.println("Created " + tokenCount + " tokens, and averaged " + renewalsPerToken + " renewals per token");
@@ -92,27 +93,12 @@ public class LifecycleTest {
         }
     }
 
-    private static final class FakeSleep implements Sleep {
-
-        private final TestClock clock;
-
-        FakeSleep(TestClock clock) {
-            this.clock = clock;
-        }
-
-        @Override
-        public void sleep(Duration duration) throws InterruptedException {
-            clock.latchFor(duration);
-        }
-    }
-
     private static final class Logins {
         // TKTK make timing tunable for tests
         // TKTK make MaxTTL an option
         private static final Duration oneHour = Duration.ofHours(1);
         private static final Duration twentyMinutes = Duration.ofMinutes(20);
-        // TKTK bump back to 0.2
-        private static final double failureRate = 0.0;
+        private static final double failureRate = 0.2;
 
         private final ConcurrentMap<String, Token> tokens = new ConcurrentHashMap<>();
         private final Clock clock;
@@ -224,7 +210,7 @@ public class LifecycleTest {
     }
 
     private static final class TestClock extends Clock {
-        private static final Duration ONE_SECOND = Duration.ofSeconds(1);
+        private static final Duration TICK = Duration.ofMillis(50);
 
         private final AtomicReference<Instant> now = new AtomicReference<>(Instant.now());
         private final ConcurrentSkipListSet<TimedLatch> latches = new ConcurrentSkipListSet<>();
@@ -250,15 +236,11 @@ public class LifecycleTest {
 
         Instant tick() {
             final Instant newNow = now.updateAndGet(instant -> {
-                return instant.plus(ONE_SECOND);
+                return instant.plus(TICK);
             });
 
             for (TimedLatch latch : latches.headSet(TimedLatch.marker(newNow), true)) {
                 if (latches.remove(latch)) {
-                    final Duration delay = Duration.between(latch.unlatchAt(), newNow);
-                    if (delay.toMillis() > 1000) {
-                        println("HIGH LATCH RELEASE DELAY " + delay);
-                    }
                     latch.release();
                 }
             }
