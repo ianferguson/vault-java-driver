@@ -3,6 +3,7 @@ package io.ianferguson.vault.api;
 import io.ianferguson.vault.VaultConfig;
 import io.ianferguson.vault.VaultException;
 import io.ianferguson.vault.json.Json;
+import io.ianferguson.vault.json.JsonArray;
 import io.ianferguson.vault.json.JsonObject;
 import io.ianferguson.vault.json.JsonValue;
 import io.ianferguson.vault.response.LogicalResponse;
@@ -11,6 +12,7 @@ import io.ianferguson.vault.rest.RestException;
 import io.ianferguson.vault.rest.RestResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import static io.ianferguson.vault.api.LogicalUtilities.adjustPathForDelete;
@@ -225,34 +227,63 @@ public class Logical {
         } else return write(path, nameValuePairs, logicalOperations.writeV1);
     }
 
+    private void addToArrayJson(JsonArray requestJson, Object value) {
+        if (value == null) {
+            requestJson = requestJson.add((String) null);
+        } else if (value instanceof Boolean) {
+            requestJson = requestJson.add((Boolean) value);
+        } else if (value instanceof Integer) {
+            requestJson = requestJson.add((Integer) value);
+        } else if (value instanceof Long) {
+            requestJson = requestJson.add((Long) value);
+        } else if (value instanceof Float) {
+            requestJson = requestJson.add((Float) value);
+        } else if (value instanceof Double) {
+            requestJson = requestJson.add((Double) value);
+        } else {
+            requestJson = requestJson.add(value.toString());
+        }
+    }
+
+    protected JsonObject mapToJsonObject(Map<String, Object> nameValuePairs) {
+        JsonObject requestJson = Json.object();
+        if (nameValuePairs != null) {
+            for (final Map.Entry<String, Object> pair : nameValuePairs.entrySet()) {
+                final Object value = pair.getValue();
+                if (value == null) {
+                    requestJson = requestJson.add(pair.getKey(), (String) null);
+                } else if (value instanceof Boolean) {
+                    requestJson = requestJson.add(pair.getKey(), (Boolean) pair.getValue());
+                } else if (value instanceof Integer) {
+                    requestJson = requestJson.add(pair.getKey(), (Integer) pair.getValue());
+                } else if (value instanceof Long) {
+                    requestJson = requestJson.add(pair.getKey(), (Long) pair.getValue());
+                } else if (value instanceof Float) {
+                    requestJson = requestJson.add(pair.getKey(), (Float) pair.getValue());
+                } else if (value instanceof Double) {
+                    requestJson = requestJson.add(pair.getKey(), (Double) pair.getValue());
+                } else if (value instanceof List) {
+                    JsonArray jsonArray = new JsonArray();
+                    for (Object v: (List<Object>) value) {
+                        addToArrayJson(jsonArray, v);
+                    }
+                    requestJson.add(pair.getKey(), jsonArray);
+                } else if (value instanceof JsonValue) {
+                    requestJson = requestJson.add(pair.getKey(), (JsonValue) pair.getValue());
+                } else {
+                    requestJson = requestJson.add(pair.getKey(), pair.getValue().toString());
+                }
+            }
+        }
+        return requestJson;
+    }
+
     private LogicalResponse write(final String path, final Map<String, Object> nameValuePairs,
                                   final logicalOperations operation) throws VaultException {
         int retryCount = 0;
         while (true) {
             try {
-                JsonObject requestJson = Json.object();
-                if (nameValuePairs != null) {
-                    for (final Map.Entry<String, Object> pair : nameValuePairs.entrySet()) {
-                        final Object value = pair.getValue();
-                        if (value == null) {
-                            requestJson = requestJson.add(pair.getKey(), (String) null);
-                        } else if (value instanceof Boolean) {
-                            requestJson = requestJson.add(pair.getKey(), (Boolean) pair.getValue());
-                        } else if (value instanceof Integer) {
-                            requestJson = requestJson.add(pair.getKey(), (Integer) pair.getValue());
-                        } else if (value instanceof Long) {
-                            requestJson = requestJson.add(pair.getKey(), (Long) pair.getValue());
-                        } else if (value instanceof Float) {
-                            requestJson = requestJson.add(pair.getKey(), (Float) pair.getValue());
-                        } else if (value instanceof Double) {
-                            requestJson = requestJson.add(pair.getKey(), (Double) pair.getValue());
-                        } else if (value instanceof JsonValue) {
-                            requestJson = requestJson.add(pair.getKey(), (JsonValue) pair.getValue());
-                        } else {
-                            requestJson = requestJson.add(pair.getKey(), pair.getValue().toString());
-                        }
-                    }
-                }
+                JsonObject requestJson = mapToJsonObject(nameValuePairs);
                 // Make an HTTP request to Vault
                 final RestResponse restResponse = new Rest()//NOPMD
                         .url(config.getAddress() + "/v1/" + adjustPathForReadOrWrite(path, config.getPrefixPathDepth(), operation))
